@@ -5968,15 +5968,18 @@ window.__SL_MORE_FIX__ = {
     var fk = field('API key'), fc = field('OAuth client ID'); fk.firstChild.value = state.yt.apiKey || ''; fc.firstChild.value = state.yt.clientId || '';
     ds.appendChild(fk); ds.appendChild(fc);
     var sv = el('button', 'btn gho', 'Save keys'); sv.onclick = function () { state.yt.apiKey = fk.firstChild.value.trim(); state.yt.clientId = fc.firstChild.value.trim(); save(); toast('Keys saved on this device'); syncYouTube(); renderView(); };
-    var ib = el('button', 'btn pri', 'Import my subscriptions');
-    ib.style.marginTop = '8px';
-    ib.onclick = function () { importSubscriptions(); };
-    // insert after the save button's parent row
-    if (sv.parentNode) sv.parentNode.appendChild(ib);
     ds.appendChild(sv); det.appendChild(ds); if (!state.yt.apiKey) det.open = false;
     yt.appendChild(det);
     var yb = el('div', 'rowbtns');
-    if (ytSigned()) { var dcn = el('button', 'btn gho', 'Disconnect'); dcn.onclick = ytDisconnect; yb.appendChild(dcn); }
+    if (ytSigned()) {
+      var dcn = el('button', 'btn gho', 'Disconnect'); dcn.onclick = ytDisconnect; yb.appendChild(dcn);
+      var imp = el('button', 'btn pri', 'Import my subscriptions');
+      imp.onclick = function () { importSubscriptions(); };
+      yb.appendChild(imp);
+      var exp = el('button', 'btn gho', 'Export channels');
+      exp.onclick = function () { exportChannels(); };
+      yb.appendChild(exp);
+    }
     else { var cn = el('button', 'btn pri', 'Sign in with Google'); cn.onclick = ytConnect; if (!ytClientId()) cn.disabled = true; yb.appendChild(cn); }
     var ay = el('button', 'btn gho', 'Add a Short'); ay.onclick = openAddClip; yb.appendChild(ay);
     yt.appendChild(yb); ac.appendChild(yt);
