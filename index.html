@@ -3549,7 +3549,9 @@ window.__SL_MORE_FIX__ = {
   // Each signed-in account keeps its own progress; signed out uses the guest slot.
   var ACC_KEY = 'sl-accounts-v1', SES_KEY = 'sl-session-v1', INBOX_KEY = 'sl-inbox-v1';
   function sessionId() { try { var s = JSON.parse(sessionStorage.getItem(SES_KEY) || localStorage.getItem(SES_KEY)); if (!s || !s.id) return null; var L = JSON.parse(localStorage.getItem(ACC_KEY) || '[]'); return L.some(function (a) { return a.id === s.id; }) ? s.id : null; } catch (e) { return null; } }
-  var SESSION = sessionId();
+  // Old device-only accounts are retired (see part_sync.js): a signed-in one is signed out and its words are imported once.
+  var SESSION = sessionId(), LEGACY_ID = SESSION;
+  if (SESSION) { try { sessionStorage.removeItem(SES_KEY); localStorage.removeItem(SES_KEY); } catch (e) {} SESSION = null; }
   var KEY = SESSION ? 'sl-local-v1:' + SESSION : 'sl-local-v1';
   var DEFAULTS = { playRate: 1, endMode: 'loop', cc: 'off', ccSize: 'm', ccBox: true, markNew: true, topics: null, reviewMode: 'mixed', reviewSize: 20, dictOff: {}, reduceMotion: false, onboarded: false, jlpt: 'N5', romajiDefault: true, furigana: true, english: true, enMode: 'tap', eqMode: 'show', literal: false, textSize: 'm', speed: 1, goal: 10, autoplay: true, sound: false, autoSpeak: true };
   var state = load();
@@ -4877,8 +4879,7 @@ window.__SL_MORE_FIX__ = {
       };
       body.appendChild(el('div', 'srcRow', '<div class="srcLbl">Japanese comes from each clip\'s</div><span class="srcPill">' + svg('mic') + 'Audio</span><span class="srcPill">' + svg('doc') + 'Description</span><span class="srcPill">' + svg('chat') + 'Comments</span>'));
       body.appendChild(el('div', 'obHint', 'We always label what was really said and what we made for you.'));
-      var hav = el('button', 'obAcc', accList().length ? 'Have an account here? <b>Sign in</b>' : 'Want your progress saved to an account? <b>Create one</b> or <b>sign in</b>');
-      hav.onclick = function () { openAuth(accList().length ? 'welcome' : 'signup'); }; body.appendChild(hav);
+
     }
     if (ob.step === 1) {
       body.appendChild(el('h1', 'obH1', 'How do you want<br>to scroll?'));
@@ -5518,11 +5519,10 @@ window.__SL_MORE_FIX__ = {
       var initial = (s.name || '').trim().charAt(0) || '学';
       head.innerHTML = '<div class="av" lang="ja">' + esc(initial) + '</div><div class="yid"><input type="text" maxlength="24" placeholder="Add your name" aria-label="Your name"><small><span class="lvl">' + esc(s.jlpt) + '</span> Guest · learning since ' + new Date(state.since).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) + '</small></div>';
       var ni = head.querySelector('input'); ni.value = s.name || ''; ni.oninput = function () { s.name = ni.value; save(); E('.av', head).textContent = (s.name || '').trim().charAt(0) || '学'; };
-      var sib = el('button', 'btn pri sm', 'Sign in'); sib.onclick = function () { openAuth(accList().length ? 'welcome' : 'signup'); }; head.appendChild(sib);
+      var sib = el('button', 'btn pri sm', 'Sign in'); sib.onclick = function () { openSignIn(); }; head.appendChild(sib);
     }
     v.appendChild(head);
-    if (acc && !acc.verified) { var vb = el('div', 'verifyban', '<span>' + svg('mail') + 'Confirm <b>' + esc(acc.email) + '</b> to secure your account.</span>'); var vbb = el('button', 'btn pri sm', 'Verify'); vbb.onclick = function () { sendVerify(acc.id); openAuth('verify', { acc: acc.id, noBack: true }); }; vb.appendChild(vbb); v.appendChild(vb); }
-    else if (!acc && yui.view === 'overview' && !s.hideAccPitch) { var pp = el('div', 'accban', '<span><b>Keep your progress tied to you.</b> Create a free account on this device for a profile, photo and bio.</span>'); var pb = el('button', 'btn pri sm', 'Create'); pb.onclick = function () { openAuth('signup'); }; var px = el('button', 'iconbtn sm', svg('x')); px.setAttribute('aria-label', 'Dismiss'); px.onclick = function () { s.hideAccPitch = true; save(); renderView(); }; pp.appendChild(pb); pp.appendChild(px); v.appendChild(pp); }
+    if (!acc && yui.view === 'overview' && !s.hideAccPitch) { var pp = el('div', 'accban', '<span><b>Want your words on more than one device?</b> Sign in with a free account. Everything still works without one.</span>'); var pb = el('button', 'btn pri sm', 'Sign in'); pb.onclick = function () { openSignIn(); }; var px = el('button', 'iconbtn sm', svg('x')); px.setAttribute('aria-label', 'Dismiss'); px.onclick = function () { s.hideAccPitch = true; save(); renderView(); }; pp.appendChild(pb); pp.appendChild(px); v.appendChild(pp); }
     var seg = el('div', 'typeseg big'); seg.setAttribute('role', 'tablist');
     [['overview', 'Overview'], ['stats', 'Stats'], ['settings', 'Settings']].forEach(function (o) {
       var b = el('button', yui.view === o[0] ? 'on' : '', o[1]); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', yui.view === o[0] ? 'true' : 'false');
@@ -5657,6 +5657,7 @@ window.__SL_MORE_FIX__ = {
     segRow(sc, 'Text size', [['s', 'Small'], ['m', 'Medium'], ['l', 'Large']], s.textSize, function (x) { s.textSize = x; save(); applyBody(); renderView(); });
 
     cloudCard(v);
+    legacyCard(v);
     installCard(v);
 
     var dc = card(v, 'Dictionaries', 'Turn layers on or off. Search, word cards and breakdowns use the ones that are on.');
@@ -9301,6 +9302,55 @@ var SLCaps = (function () {
   setTimeout(function () { syncTouch(); if (sbSignedIn()) syncNow(); }, 2500);
   window.addEventListener('online', function () { if (sbSignedIn()) syncNow(); });
   document.addEventListener('visibilitychange', function () { if (!document.hidden && sbSignedIn() && Date.now() - SYNC.at > 120000) syncNow(); });
+
+  /* ---- Old device-only accounts: retired ----
+     They never left the browser (no real email, passwords checked locally), so they're replaced by the account above.
+     Nothing is deleted behind your back: a signed-in old account is signed out on load and its words are imported once;
+     any others can be imported from Settings, and the old data can be cleared from there when you're done. */
+  function openSignIn() { if (!SBC) { toast('Accounts aren\'t available in this build'); return; } openSheet('trlogin', { mode: 'in' }); }
+  function openAuth() { openSignIn(); }
+  function legacyImport(id) {
+    var raw = null, o, n = 0; try { raw = localStorage.getItem('sl-local-v1:' + id); o = raw && JSON.parse(raw); } catch (e) { o = null; }
+    if (!o) return 0;
+    Object.keys(o.deck || {}).forEach(function (k) {
+      var a = o.deck[k], b = state.deck[k];
+      if (!b || (a.lastReviewedAt || a.addedAt || 0) > (b.lastReviewedAt || b.addedAt || 0)) { state.deck[k] = a; n++; }
+    });
+    (o.known || []).forEach(function (w) { if (state.known.indexOf(w) < 0) state.known.push(w); });
+    (o.customWords || []).forEach(function (w) { if (!state.customWords.some(function (x) { return x.headword === w.headword; })) state.customWords.push(w); });
+    Object.keys(o.savedClips || {}).forEach(function (k) { if (!state.savedClips[k]) state.savedClips[k] = o.savedClips[k]; });
+    Object.keys(o.liked || {}).forEach(function (k) { if (!state.liked[k]) state.liked[k] = o.liked[k]; });
+    if (o.streak && (o.streak.lastDay || '') > ((state.streak || {}).lastDay || '')) state.streak = Object.assign({}, o.streak, { best: Math.max(o.streak.best || 0, (state.streak || {}).best || 0) });
+    accUpdate(id, function (a) { a.imported = true; });
+    save(); rebuildIndex(); return n;
+  }
+  if (LEGACY_ID) setTimeout(function () { var n = legacyImport(LEGACY_ID); try { refresh({ subs: true }); renderView(); } catch (e) {} if (n) toast('Imported ' + n + ' words from your old account'); }, 300);
+
+  SHEETS.legacyclear = function () {
+    var L = accList(), b = sheetFrame('Remove old accounts?', L.length + ' on this device');
+    b.appendChild(el('div', 'note2 tight', 'This deletes the old device-only accounts (profiles, passwords, the practice mailbox and anything stored under them) from this browser. Import their words first. This can\'t be undone.'));
+    var go = el('button', 'btn pri', 'Delete old accounts'), no = el('button', 'btn gho', 'Cancel');
+    go.onclick = function () {
+      L.forEach(function (a) { try { localStorage.removeItem('sl-local-v1:' + a.id); } catch (e) {} });
+      try { localStorage.removeItem(ACC_KEY); localStorage.removeItem(INBOX_KEY); sessionStorage.removeItem(SES_KEY); } catch (e) {}
+      closeStudy(); toast('Old accounts removed'); renderView();
+    };
+    no.onclick = closeStudy; b.appendChild(go); b.appendChild(no);
+  };
+  function legacyCard(v) {
+    var L = accList(); if (!L.length) return;
+    var c = card(v, 'Old accounts on this device', 'Retired: they only ever lived in this browser. Bring their words across, then remove them.');
+    var st = el('div', 'stack');
+    L.forEach(function (a) {
+      var n = 0; try { n = Object.keys((JSON.parse(localStorage.getItem('sl-local-v1:' + a.id)) || {}).deck || {}).length; } catch (e) {}
+      var row = el('div', 'vrow', '<div class="mn"><div class="rd">@' + esc(a.username) + '</div><div class="md">' + n + ' saved words' + (a.imported ? ' · imported' : '') + '</div></div>');
+      var ib = el('button', 'btn gho', a.imported ? 'Import again' : 'Import words');
+      ib.onclick = function () { var k = legacyImport(a.id); toast(k ? 'Imported ' + k + ' words' : 'Nothing new to import'); renderView(); };
+      row.appendChild(ib); st.appendChild(row);
+    });
+    c.appendChild(st);
+    var rm = el('button', 'btn gho', 'Remove old accounts…'); rm.onclick = function () { openSheet('legacyclear'); }; c.appendChild(rm);
+  }
 
 
 
