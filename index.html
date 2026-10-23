@@ -4051,6 +4051,8 @@ window.__SL_MORE_FIX__ = {
     });
     P.paintSound = function () { sndBtn.innerHTML = svg(state.settings.sound ? 'volume' : 'mute') + '<span class="n">' + (state.settings.sound ? 'Sound' : 'Muted') + '</span>'; sndBtn.classList.toggle('soundoff', !state.settings.sound); sndBtn.setAttribute('aria-pressed', state.settings.sound ? 'true' : 'false'); };
     P.paintSound();
+    // Subs sits just above Sound, at the bottom of the rail.
+    rail.insertBefore(capBtn, sndBtn);
     page.appendChild(rail);
 
     // ---- bottom: learning layer ----
