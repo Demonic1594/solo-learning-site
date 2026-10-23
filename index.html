@@ -4320,6 +4320,7 @@ window.__SL_MORE_FIX__ = {
     keep[Math.round((E('#pager').scrollTop / (E('#pager').clientHeight || 1)))] = 1;
     pages.slice().forEach(function (P) {
       if (P.idx == null || keep[P.idx] || P === player.cur) return;
+      if (P.destroyEmbed) P.destroyEmbed();
       if (io) io.unobserve(P.el);
       var shell = el('div', 'page shell'); shell.dataset.i = P.idx;
       if (P.el.parentNode) E('#pager').replaceChild(shell, P.el);
@@ -8365,6 +8366,164 @@ var SLCaps = (function () {
     fmt: fmt,
   };
 })();
+
+/* ---- YouTube embed sync layer ----
+   Overrides setupEmbed: keeps the lazy-iframe approach and adds the raw
+   IFrame-API protocol (listening handshake, time polling, state events) so
+   real clips run on the video's clock: live progress, real duration,
+   baked-caption line sync (window.__SL_CAPTIONS__), seek, endMode and
+   unplayable fallback. TikTok keeps the simple command path. */
+
+  function ytCapsFor(c) {
+    try { return (window.SLCaps && SLCaps.get(c.url)) || (window.__SL_CAPTIONS__ || {})[c.vid] || null; } catch (e) { return null; }
+  }
+  function ytLineAt(caps, secMs) {
+    var best = null;
+    for (var i = 0; i < caps.lines.length; i++) {
+      if (caps.lines[i].start <= secMs) best = caps.lines[i]; else break;
+    }
+    return best;
+  }
+  window.__ytLineAt = ytLineAt;
+
+  var ytRouter = null, ytTargets = [];
+  function ytEnsureListener() {
+    if (ytRouter) return;
+    ytRouter = function (ev) {
+      var data = null;
+      try { data = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data; } catch (e) { return; }
+      if (!data || !data.event) return;
+      for (var i = 0; i < ytTargets.length; i++) {
+        if (ytTargets[i].win === ev.source) { try { ytTargets[i].on(data); } catch (e) {} return; }
+      }
+    };
+    window.addEventListener('message', ytRouter);
+  }
+
+  function setupEmbed(P) {
+    var c = P.clip;
+    var box = el('div', 'embed ' + c.platform.toLowerCase()), loaded = false, frame = null;
+    // facade: real thumbnail while the player boots
+    if (c.platform === 'YouTube' && c.vid) {
+      var th = el('div', 'embedwait facadeth');
+      th.innerHTML = '<img alt="" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" src="https://i.ytimg.com/vi/' + esc(c.vid) + '/oar2.jpg" onerror="this.onerror=null;this.src=this.src.replace(\'oar2\',\'hqdefault\')"><span class="spin"></span>';
+      box.appendChild(th);
+    } else {
+      box.appendChild(el('div', 'embedwait', '<span class="spin"></span><span>Loading the ' + esc(c.platform) + ' player…</span>'));
+    }
+    P.el.classList.add('real');
+
+    var poll = 0, dead = false, caps = c.platform === 'YouTube' ? ytCapsFor(c) : null, curLine = null;
+    if (caps && caps.lines && caps.lines.length) {
+      c.dur = Math.max(c.dur || 0, (caps.lines[caps.lines.length - 1].start / 1000) + 3);
+    }
+
+    function post(msg) { try { frame && frame.contentWindow && frame.contentWindow.postMessage(typeof msg === 'string' ? msg : JSON.stringify(msg), '*'); } catch (e) {} }
+    function cmd(name, args) { post({ event: 'command', func: name, args: args || [] }); }
+    function applyPlayback(play) {
+      if (c.platform === 'YouTube') {
+        cmd(play ? 'playVideo' : 'pauseVideo');
+        cmd(state.settings.sound ? 'unMute' : 'mute');
+        cmd('setPlaybackRate', [state.settings.playRate || 1]);
+      } else if (c.platform === 'TikTok') {
+        try {
+          frame.contentWindow.postMessage({ type: play ? 'play' : 'pause', 'x-tiktok-player': true }, '*');
+          frame.contentWindow.postMessage({ type: state.settings.sound ? 'unMute' : 'mute', 'x-tiktok-player': true }, '*');
+        } catch (e) {}
+      }
+    }
+    function swapLine(ln) {
+      if (!ln || ln === curLine) return;
+      curLine = ln;
+      if (ln.ja && ln.ja !== c.jp) {
+        c.jp = ln.ja; c.en = ln.en || c.en || '';
+        c.knownPct = typeof knownShare === 'function' && c.jp ? knownShare(c.jp) : c.knownPct;
+        P.nowIdx = -1; P.tokEls = [];
+        if (P.revealed) P.revealed = false;
+        if (typeof P.paintSubs === 'function') { P.paintSubs(); if (typeof P.paintChips === 'function') P.paintChips(); if (typeof P.paintCredit === 'function') P.paintCredit(); }
+      }
+    }
+    function onData(d) {
+      if (dead) return;
+      if (d.event === 'onReady') { box.classList.add('ready'); applyPlayback(player.cur === P && player.running()); }
+      else if (d.event === 'onStateChange') {
+        var s = d.info;
+        if (s === 0) { // ended
+          var em = state.settings.endMode || 'loop';
+          if (em === 'next' && !Object.keys(player.holds).length) { var pg = E('#pager'); pg.scrollBy({ top: pg.clientHeight, behavior: 'smooth' }); }
+          else if (em === 'once') { player.userPaused = true; player.sync(); }
+          else { cmd('seekTo', [0, true]); cmd('playVideo'); P.t = 0; }
+        } else if (s === 1) { box.classList.add('ready'); }
+      } else if (d.event === 'onError') {
+        dead = true; c._noplay = 1;
+        box.classList.remove('ready'); box.classList.add('dead');
+        box.innerHTML = '<div class="embedwait"><span>This video can\'t play here (the owner blocked embedding). Open it in YouTube instead.</span></div>';
+        P.el.classList.remove('real');
+        if (typeof toast === 'function') toast('Can\'t embed this one — opening YouTube is your best bet', function () { window.open(c.url, '_blank', 'noopener'); }, 'Open');
+      } else if (d.event === 'infoDelivery') {
+        var inf = d.info || {};
+        if (typeof inf.currentTime === 'number') {
+          P.t = inf.currentTime;
+          if (caps && caps.lines) swapLine(ytLineAt(caps, P.t * 1000));
+          var dur = typeof inf.duration === 'number' ? inf.duration : (c._ytDur || 0);
+          if (dur > 0.5) { c._ytDur = dur; if (Math.abs((c.dur || 0) - dur) > 0.5) { c.dur = dur; if (P.showTime) P.showTime(false); } }
+          if (P.paint && c.dur) P.paint(Math.min(1, P.t / c.dur));
+        }
+      }
+    }
+    function startPoll() {
+      if (poll) return;
+      poll = setInterval(function () {
+        if (dead || !frame || player.cur !== P) return;
+        cmd('getCurrentTime'); if (!c._ytDur) cmd('getDuration');
+      }, 250);
+    }
+
+    P.media = function (run) {
+      if (dead) return;
+      if (run && !loaded) {
+        loaded = true;
+        frame = document.createElement('iframe');
+        frame.src = c.embed; frame.title = c.platform + ' video by ' + c.creator;
+        frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+        frame.setAttribute('allowfullscreen', ''); frame.loading = 'lazy';
+        frame.referrerPolicy = 'strict-origin-when-cross-origin';
+        frame.onload = function () {
+          box.classList.add('ready');
+          setTimeout(function () {
+            if (c.platform === 'YouTube') { ytEnsureListener(); myWin = frame.contentWindow; ytTargets.push({ win: myWin, on: onData }); post({ event: 'listening', id: 1, channel: 'widget' }); }
+            applyPlayback(player.cur === P && player.running());
+            startPoll();
+          }, 400);
+        };
+        box.appendChild(frame);
+        // real clips speak for themselves: un/mute the video instead of TTS
+        if (c.platform === 'YouTube') {
+          var baseVoice = P.voice;
+          P.voice = function () {
+            if (P.clip.real && frame) { cmd(state.settings.sound ? 'unMute' : 'mute'); if (caps && caps.lines && player.running() && P.t < 0.05) { swapLine(ytLineAt(caps, 0)); } return; }
+            if (baseVoice) baseVoice();
+          };
+        }
+        if (caps && caps.lines) swapLine(ytLineAt(caps, 0));
+      } else applyPlayback(run);
+      if (!run && poll) { /* keep polling while active page, even paused */ }
+    };
+    var myWin = null;
+    P.destroyEmbed = function () {
+      if (poll) { clearInterval(poll); poll = 0; }
+      var w = myWin || (frame && frame.contentWindow);
+      if (w) ytTargets = ytTargets.filter(function (t) { return t.win !== w; });
+      try { if (frame) frame.remove(); } catch (e) {}
+    };
+    // scrub release -> seek the real video
+    P.el.addEventListener('pointerup', function () {
+      if (loaded && !dead && frame && player.cur === P && c.platform === 'YouTube') cmd('seekTo', [Math.max(0, P.t), true]);
+    });
+
+    P.el.insertBefore(box, P.el.children[1] || null);
+    if (c.platform === 'YouTube' && typeof ytReady === 'function' && ytReady() && !c._synced) { c._synced = 1; if (typeof syncYouTube === 'function') syncYouTube(); }
+  }
 
 
 
