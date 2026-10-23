@@ -3622,6 +3622,7 @@ window.__SL_MORE_FIX__ = {
   function rebuildIndex() {
     var all = baseEntries.slice(), mine = state.customWords.map(function (w) { return { h: w.headword, r: w.reading, g: [w.meaning], n: null }; });
     PACKS.forEach(function (pk, n) { if (pk.tok && packOn(pk.key)) mergeLayer(all, pk, 8000000 + n * 1000); });
+    if (typeof mergeMore === 'function') mergeMore(all);
     mergeLayer(all, { name: 'My words', short: 'Mine', entries: mine }, 9000000);
     index = new SL.MemoryIndex(all, DATA.writtenForms);
     tokenize = SL.createTokenizer(index, all);
@@ -4970,7 +4971,8 @@ window.__SL_MORE_FIX__ = {
   function buildDX() {
     var L = [];
     function add(e) { e.hh = norm(e.h); e.hk = norm(e.r); e.gl = (e.g || []).map(function (g) { return String(g).toLowerCase().replace(/\([^)]*\)/g, '').replace(/^to /, '').trim(); }); L.push(e); }
-    baseEntries.forEach(function (e) { add({ k: 'core', id: 'c' + e.id, h: e.headword, r: e.reading, g: e.glosses, pos: e.pos, jlpt: e.jlpt, pitch: e.pitch }); });
+    baseEntries.forEach(function (e) { add({ k: 'core', id: 'c' + e.id, h: e.headword, r: e.reading, g: e.glosses, pos: e.pos, jlpt: e.jlpt, pitch: e.pitch, tags: e.regs && e.regs.length ? e.regs : undefined }); });
+    if (typeof addMoreDX === 'function') addMoreDX(add);
     PACKS.forEach(function (p) {
       if (!packOn(p.key)) return;
       p.entries.forEach(function (x, i) { add({ k: p.key, id: p.key + i, h: x.h, r: x.r, g: x.g, n: x.n, en: x.en, reg: p.reg }); });
@@ -5659,6 +5661,7 @@ window.__SL_MORE_FIX__ = {
     var dc = card(v, 'Dictionaries', 'Turn layers on or off. Search, word cards and breakdowns use the ones that are on.');
     var counts2 = {}; buildDX().list.forEach(function (e) { counts2[e.k] = (counts2[e.k] || 0) + 1; });
     var dstack = el('div', 'stack');
+    moreSwitch(dstack);
     switchRow(dstack, 'Core dictionary', '22,000+ common words. Always on.', true, function () { toast('The core dictionary is always on'); }).classList.add('locked');
     DSRC.slice(1).map(function (d) { return [d[0], d[1], d[3]]; }).concat(PACKS.map(function (p) { return [p.key, p.name, p.desc]; })).forEach(function (d) {
       switchRow(dstack, esc(d[1]), esc(d[2]), packOn(d[0]), function (on) { s.dictOff = s.dictOff || {}; if (on) delete s.dictOff[d[0]]; else s.dictOff[d[0]] = 1; save(); rebuildIndex(); refresh({ subs: true }); });
@@ -8714,6 +8717,103 @@ var SLCaps = (function () {
     } else box.appendChild(el('div', 'install-note', 'To install, use your browser\'s menu: "Install app" or "Add to Home Screen". Once you\'ve opened it online, it works offline too.'));
     c.appendChild(box);
   }
+
+  /* ---- Full dictionary ----
+     About 170,000 more JMdict words with register tags (Slang, Honorific, Kansai-ben…), real example sentences and
+     "which particle?" statistics. Fetched after the app starts (dict-more.json + dict-ex.json next to the page, cached by
+     the service worker), so the first load stays small. Settings → Dictionaries → Full dictionary turns it off. */
+  var MORE = null, MORE_EX = null, MORE_ST = 'idle', PART_BY = {}, EX_BY = {}, MORE_KEYS = null;
+  PACK_BY['jmdict-more'] = { key: 'jmdict-more', short: 'JMdict', name: 'Full JMdict' };
+
+  function moreOn() { return state.settings.fullDict !== false; }
+  function moreNote() {
+    return MORE_ST === 'ready' ? 'About 170,000 more words with slang, keigo and dialect tags, example sentences and particle stats. Loaded.'
+      : MORE_ST === 'loading' ? 'Loading about 170,000 more words…'
+      : MORE_ST === 'failed' ? 'Couldn\'t load. Check your connection and try again.'
+      : 'About 170,000 more words, example sentences and particle stats. A 10 MB download after the app starts; turn off to save data.';
+  }
+  function moreSwitch(stack) {
+    var row = switchRow(stack, 'Full dictionary', esc(moreNote()), moreOn(), function (on) {
+      state.settings.fullDict = on; save();
+      if (on) loadMore(); else { rebuildIndex(); refresh({ subs: true }); }
+      renderView();
+    });
+    if (MORE_ST === 'failed') { var rt = el('button', 'linkbtn2', 'Try again'); rt.onclick = function () { MORE_ST = 'idle'; loadMore(); renderView(); }; row.appendChild(rt); }
+  }
+
+  function fetchJson(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
+  function loadMore() {
+    if (!moreOn() || MORE_ST === 'loading' || MORE_ST === 'ready') { if (MORE_ST === 'ready') { rebuildIndex(); refresh({ subs: true }); } return; }
+    MORE_ST = 'loading';
+    Promise.all([fetchJson('dict-more.json'), fetchJson('dict-ex.json')]).then(function (r) {
+      MORE = r[0]; MORE_EX = r[1];
+      PART_BY = {}; EX_BY = {};
+      MORE_EX.pt.forEach(function (x) { (PART_BY[x[0]] = PART_BY[x[0]] || []).push({ p: x[1], jp: x[2], en: x[3], c: x[4] }); });
+      MORE_EX.ex.forEach(function (x) { (EX_BY[x[0]] = EX_BY[x[0]] || []).push({ jp: x[1], en: x[2] }); });
+      baseEntries.forEach(function (e) { var t = MORE.ct[e.id]; if (t) e.regs = t; });
+      MORE_KEYS = {}; baseEntries.forEach(function (e) { MORE_KEYS[e.headword + '|' + e.reading] = 1; });
+      MORE_ST = 'ready'; rebuildIndex(); refresh({ subs: true }); logMoreReady();
+    }).catch(function () { MORE_ST = 'failed'; renderView(); });
+  }
+  function logMoreReady() { if (E('#view .tabhead h1') && /^You$/.test(E('#view .tabhead h1').textContent)) renderView(); }
+  // Entries JMdict adds beyond the core list. Same word and reading as a core entry is skipped (core wins).
+  function moreList() { return (MORE_ST === 'ready' && moreOn() && MORE) ? MORE.e : []; }
+  function mergeMore(all) {
+    var L = moreList(); if (!L.length) return;
+    for (var i = 0; i < L.length; i++) {
+      var x = L[i];
+      if (!x[0] || x[0].indexOf('〜') >= 0 || MORE_KEYS[x[0] + '|' + x[1]]) continue;
+      all.push({ id: 10000000 + i, headword: x[0], reading: x[1], romaji: '', glosses: x[2], pos: x[3], note: x[5] || null, sources: ['JMdict'], regs: x[4], pitch: x[6].length ? x[6] : undefined });
+    }
+  }
+  function addMoreDX(add) {
+    var L = moreList();
+    for (var i = 0; i < L.length; i++) {
+      var x = L[i];
+      if (!x[0] || MORE_KEYS[x[0] + '|' + x[1]]) continue;
+      add({ k: 'jmdict-more', id: 'jm' + i, h: x[0], r: x[1], g: x[2], pos: x[3], n: x[5] || undefined, tags: x[4].length ? x[4] : undefined, pitch: x[6].length ? x[6] : undefined });
+    }
+  }
+
+  // ---- the word sheet: register chips, "Which particle?", real examples ----
+  var REG_SKIP = { Rare: 1 };
+  function particleStats(head) {
+    var rows = PART_BY[head]; if (!rows || !rows.length) return [];
+    var by = {}, tot = 0;
+    rows.forEach(function (x) { var o = by[x.p] || (by[x.p] = { p: x.p, c: 0, ex: x }); o.c += x.c || 1; if ((x.c || 1) > (o.ex.c || 1)) o.ex = x; tot += x.c || 1; });
+    return Object.keys(by).map(function (k) { by[k].pct = Math.round(by[k].c / tot * 100); return by[k]; }).sort(function (a, b) { return b.c - a.c; }).slice(0, 4);
+  }
+  var _entrySheet = SHEETS.entry;
+  SHEETS.entry = function () {
+    _entrySheet();
+    try {
+      var e = sh && sh.e; if (!e || e.k === 'kanji' || e.k === 'ej') return;
+      var tg = E('.tags', sheet);
+      if (tg && e.tags) e.tags.forEach(function (t) { if (!REG_SKIP[t]) tg.appendChild(el('span', 'tag eq', esc(t))); });
+      var anchor = E('.rowbtns', sheet); if (!anchor) return;
+      var ps = particleStats(e.h), after = anchor;
+      if (ps.length) {
+        var box = el('div', 'prtl'); box.appendChild(el('div', 'h3', 'Which particle?'));
+        ps.forEach(function (x) {
+          var r = el('div', 'prt', '<div class="prth"><b lang="ja">' + esc(x.p) + ' ' + esc(e.h) + '</b><span>' + x.pct + '%</span><i style="width:' + Math.max(4, x.pct) + '%"></i></div>' + (x.ex ? '<div class="prte"><span lang="ja">' + esc(x.ex.jp) + '</span><small>' + esc(x.ex.en) + '</small></div>' : ''));
+          box.appendChild(r);
+        });
+        anchor.parentNode.insertBefore(box, anchor.nextSibling); after = box;
+      }
+      var xs = (EX_BY[e.h] || []).slice(0, 3);
+      if (xs.length && !(e.ex && e.ex.length) && sheet.textContent.indexOf('Example sentences') < 0) {
+        var eb = el('div', 'prtl'); eb.appendChild(el('div', 'h3', 'Example sentences'));
+        xs.forEach(function (x) { var r = el('button', 'prt', '<div class="prte"><span lang="ja">' + esc(x.jp) + '</span><small>' + esc(x.en) + '</small></div>'); r.style.textAlign = 'left'; r.onclick = function () { speak(x.jp); }; eb.appendChild(r); });
+        after.parentNode.insertBefore(eb, after.nextSibling);
+      }
+    } catch (err) {}
+  };
+
+  // kick off after the app is up, unless the person asked their browser to save data
+  setTimeout(function () {
+    var c = navigator.connection;
+    if (moreOn() && !(c && c.saveData)) loadMore();
+  }, 3500);
 
 /* ---- Words → Translate ----
    Whole messages between English and Japanese, tuned to who you're talking to. Ported from the React app.
