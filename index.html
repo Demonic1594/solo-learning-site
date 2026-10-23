@@ -3569,7 +3569,7 @@ window.__SL_MORE_FIX__ = {
     s.known = s.known || ['の', 'が', 'を', 'は', 'に', 'で', 'と', 'も', 'だ', 'です', 'ね', 'よ', 'これ', 'それ', '何', '私', '今', '今日'];
     s.activity = s.activity || {}; s.liked = s.liked || {}; s.reviewLog = s.reviewLog || []; s.customWords = s.customWords || [];
     s.mode = s.mode || 'Mix';
-    s.myCaps = s.myCaps || {}; s.hiddenClips = s.hiddenClips || {}; s.practice = s.practice || {}; s.practiceDay = s.practiceDay || {}; s.following = s.following || {};
+    s.myCaps = s.myCaps || {}; s.hiddenClips = s.hiddenClips || {}; s.practice = s.practice || {}; s.practiceDay = s.practiceDay || {}; s.following = s.following || {}; ['yuki_0812', 'hana.mochi', 'ken.travels', 'sora_desu', 'mika.eats', 'riku.jp', 'emma.learns.jp', 'jay_nihongo', 'aoi.room', 'tomo_tomo', 'lena.kanji', 'matt.n5'].forEach(function (u) { delete s.following[u]; });
     s.seenW = s.seenW || {}; s.savedClips = s.savedClips || {}; s.drills = s.drills || {};
     s.stats = Object.assign({ watch: {}, seen: {}, plat: {}, cat: {}, studied: {}, lookups: 0, kanjiViews: 0, sessions: 0 }, s.stats || {});
     s.userClips = s.userClips || []; s.rest = s.rest || 0; s.yt = s.yt || {}; s.brand = s.brand || {}; s.comments = s.comments || {}; s.since = s.since || Date.now();
@@ -4523,28 +4523,8 @@ window.__SL_MORE_FIX__ = {
     return CLIPS.filter(function (c) { return c.jp && c.id !== exceptId && c.jp.indexOf(word) >= 0; }).slice(0, 4);
   }
   // ---- comments ----
-  var CM_JP = [
-    ['これ最高！', 'This is the best!'], ['わかる〜', 'So relatable.'], ['草', 'lol (internet slang)'], ['もう一回見ちゃった', 'I ended up watching it again.'],
-    ['めっちゃ好き', 'I love this so much.'], ['字幕ありがたい', 'So grateful for the subtitles.'], ['これ知らなかった！', 'I didn\'t know this!'],
-    ['声がかわいい', 'Such a cute voice.'], ['明日やってみる', 'I\'ll try it tomorrow.'], ['癒やされる', 'This is so soothing.'], ['続きが気になる', 'I want to see what happens next.'], ['天才かよ', 'Are you a genius or what?'],
-  ];
-  var CM_EN = ['the way I understood half of this', 'saving this for my study session', 'wait how do you say the second word?', 'my Japanese teacher would be proud',
-    'came for the vibes, stayed for the grammar', 'more of these please', 'I replayed it at slow speed like 5 times', 'finally a sentence I actually know'];
-  var CM_USERS = ['yuki_0812', 'hana.mochi', 'ken.travels', 'sora_desu', 'mika.eats', 'riku.jp', 'emma.learns.jp', 'jay_nihongo', 'aoi.room', 'tomo_tomo', 'lena.kanji', 'matt.n5'];
   var CM_COLORS = ['232,131,111', '108,207,210', '244,168,192', '155,212,154', '237,185,89', '185,138,224'];
   function myComments(id) { return (state.comments && state.comments[id]) || []; }
-  function clipComments(clip) {
-    var h = hash(clip.id + 'cm'), out = [], used = {};
-    for (var i = 0; i < 7; i++) {
-      var r = hash(clip.id + ':' + i), jp = (r % 3) !== 0;
-      var key = jp ? 'j' + (r >>> 3) % CM_JP.length : 'e' + (r >>> 3) % CM_EN.length;
-      if (used[key]) continue; used[key] = 1;
-      var src = jp ? CM_JP[(r >>> 3) % CM_JP.length] : [CM_EN[(r >>> 3) % CM_EN.length], null];
-      out.push({ id: clip.id + 'c' + i, user: CM_USERS[(r >>> 7) % CM_USERS.length], text: src[0], en: src[1], likes: (r >>> 11) % (i === 0 ? 4000 : 900) + 3, age: ['2h', '5h', '1d', '3d', '1w', '2w'][(r >>> 5) % 6], color: CM_COLORS[(r >>> 9) % CM_COLORS.length] });
-    }
-    if (clip.source === 'Comment' && clip.jp) out.unshift({ id: clip.id + 'top', user: CM_USERS[h % CM_USERS.length], text: clip.jp, en: clip.en, likes: 5200 + h % 3000, age: '1d', color: CM_COLORS[h % CM_COLORS.length], pinned: true });
-    return out.sort(function (a, b) { return (b.pinned ? 1e9 : b.likes) - (a.pinned ? 1e9 : a.likes); });
-  }
   function openComments(clip) {
     closePop();
     sh = { comments: true, clip: clip, show: {}, filter: 'all' };
@@ -4553,7 +4533,7 @@ window.__SL_MORE_FIX__ = {
     shade.classList.add('show'); sheet.classList.add('show'); document.body.classList.add('sheeton');
   }
   function renderComments() {
-    var c = sh.clip, mine = myComments(c.id), list = mine.concat(clipComments(c));
+    var c = sh.clip, mine = myComments(c.id), list = mine;
     var keep = E('.shbody', sheet) ? E('.shbody', sheet).scrollTop : 0;
     sheet.innerHTML = '';
     var grab = el('div', 'shgrab', '<i></i>'); sheet.appendChild(grab); dragToClose(grab);
@@ -7068,7 +7048,7 @@ window.__SL_MORE_FIX__ = {
     if (u.length > 20) return '20 characters at most';
     if (!/^[a-z0-9_.]+$/.test(u)) return 'Use lowercase letters, numbers, _ and . only';
     if (/^\.|\.$|\.\./.test(u)) return 'Periods can\'t be at the start, end or doubled';
-    if (RESERVED0.indexOf(u) >= 0 || CM_USERS.indexOf(u) >= 0) return 'That username is taken';
+    if (RESERVED0.indexOf(u) >= 0) return 'That username is taken';
     var a = accByName(u); if (a && a.id !== selfId) return 'That username is taken';
     return null;
   }
@@ -7597,13 +7577,6 @@ window.__SL_MORE_FIX__ = {
     if (!SESSION && state.following[u]) n++;
     return { n: n, who: who };
   }
-  var BIOS = ['Watching cooking shorts until I can order without pointing 🍜', 'N4 and climbing. Anime got me here, the comments keep me here.', 'Moving to Osaka next spring, so Kansai-ben is my homework.', '毎日ちょっとずつ。Small steps every day.', 'Learning with my kid. She\'s winning.', 'Kanji nerd. Ask me about radicals.', 'Shadowing one line a day. Day 200-something.', 'English teacher in Sapporo, learning the other direction.'];
-  function sampleProfile(u) {
-    var h = hash(u + 'pf'), lv = ['N5', 'N4', 'N4', 'N3', 'N3', 'N2'][h % 6];
-    return { sample: true, username: u, displayName: u.replace(/[._]/g, ' ').replace(/\b\w/g, function (x) { return x.toUpperCase(); }).replace(/ \d+$/, ''), color: userColor(u), bio: BIOS[h % BIOS.length], created: Date.now() - (60 + h % 900) * 864e5, privacy: PRIV_DEF,
-      st: { streak: h % 7 === 0 ? 0 : 3 + h % 140, best: 20 + h % 300, saved: 40 + h % 1400, mastered: 10 + h % 500, seen: 200 + h % 6000, reviews: 300 + h % 9000, practice: 50 + h % 2000, level: lv, savedClips: [], following: [] },
-      badges: BADGES.filter(function (b, i) { return (h >>> i) & 1; }).map(function (b) { return b[0]; }), followers: 12 + h % 4000, followingN: 5 + h % 300 };
-  }
   function openProfile(u) {
     u = String(u || '').replace(/^@/, '').toLowerCase();
     var prev = sh && sh.kind !== 'profile' ? sh : (sh && sh.prev) || null;
@@ -7615,9 +7588,13 @@ window.__SL_MORE_FIX__ = {
     if (self || (a && a.id === SESSION)) { a = cur; P = { acc: a, st: statsOf(state), badges: earnedBadges(state), self: true }; }
     else if (a) { var st = slotOf(a.id); P = { acc: a, st: statsOf(st), badges: earnedBadges(st) }; }
     else if (guestSelf) { P = { acc: { username: u, displayName: state.settings.name || 'You', privacy: PRIV_DEF, created: state.since }, st: statsOf(state), badges: earnedBadges(state), self: true, guest: true }; }
-    else { var sp = sampleProfile(u); P = { acc: sp, st: sp.st, badges: sp.badges, sample: true }; }
+    else {
+      var nb = sheetFrame('@' + u, 'Not found');
+      nb.appendChild(el('div', 'emptycard small', '<div class="eh">No one here</div><p>There\'s no learner called @' + esc(u) + ' on this device.</p>'));
+      return;
+    }
     var A = P.acc, pv = priv(A), viewer = P.self && !sh.asOther ? 'self' : 'other', hidden = viewer === 'other' && pv.visibility === 'private' && !(state.following[u] && pv.follows);
-    var b = sheetFrame(P.self ? 'Your profile' : '@' + A.username, P.sample ? 'Sample learner' : P.guest ? 'Guest mode' : 'Solo Learning profile');
+    var b = sheetFrame(P.self ? 'Your profile' : '@' + A.username, P.guest ? 'Guest mode' : 'Solo Learning profile');
     if (sh.prev) { var bk = el('button', 'linkbtn2 backl', svg('back') + 'Back'); bk.onclick = function () { var p = sh.prev; sh = p; renderSheet(); }; b.appendChild(bk); }
     var pf = el('div', 'upf');
     pf.appendChild(el('div', 'pban', '<i style="--uc:' + (A.color || userColor(A.username)) + '"></i>'));
@@ -7626,7 +7603,7 @@ window.__SL_MORE_FIX__ = {
     pf.appendChild(hd);
     if (A.bio) pf.appendChild(el('div', 'pbio', esc(A.bio).replace(/\n/g, '<br>')));
     else if (viewer === 'self' && !P.guest) pf.appendChild(el('div', 'pbio empty', 'No bio yet.'));
-    var fol = P.sample ? { n: A.followers + (state.following[u] ? 1 : 0) } : followersOf(u), fing = P.sample ? A.followingN : P.st.following.length;
+    var fol = followersOf(u), fing = P.st.following.length;
     var cnts = el('div', 'pcnt');
     var fc = el('button', null, '<b>' + fmtK(fol.n) + '</b> ' + (fol.n === 1 ? 'follower' : 'followers')), gc = el('button', null, '<b>' + fmtK(fing) + '</b> following');
     gc.onclick = function () { if (P.self) openSheet('people', { tab: 'following', prev: sh }); };
@@ -7672,34 +7649,31 @@ window.__SL_MORE_FIX__ = {
     profFoot(b, P);
   };
   function profFoot(b, P) {
-    if (P.sample) b.appendChild(el('div', 'note2', 'This is a sample learner, made up like the sample comments, to show how profiles look. Real profiles belong to accounts created on this device.'));
     if (P.self && !P.guest && !sh.asOther) { var ps = el('button', 'linkbtn2', svg('lock') + 'Privacy settings'); ps.onclick = function () { closeStudy(); setTab('me'); yui.view = 'settings'; renderView(); setTimeout(function () { var x = E('#privcard'); if (x) x.scrollIntoView({ block: 'start' }); }, 60); }; b.appendChild(ps); }
   }
   function earnedBadges(st) { if (!st) return []; var cn = counts(st); return BADGES.filter(function (x) { return cn[x[3]] >= x[4]; }).map(function (x) { return x[0]; }); }
 
   // ---- people ----
   SHEETS.people = function () {
-    var b = sheetFrame('People', 'Learners on this device and sample learners', true), q = (sh.q || '').toLowerCase(), cur = me();
+    var b = sheetFrame('People', 'Learners on this device', true), q = (sh.q || '').toLowerCase(), cur = me();
     if (sh.prev) { var bk = el('button', 'linkbtn2 backl', svg('back') + 'Back'); bk.onclick = function () { sh = sh.prev; renderSheet(); }; b.appendChild(bk); }
     var tabs = el('div', 'seg'); [['find', 'Find'], ['following', 'Following']].forEach(function (o) { tabs.appendChild(obRadio('sg', o[1], (sh.tab || 'find') === o[0], function () { sh.tab = o[0]; SHEETS.people(); })); }); b.appendChild(tabs);
     var list = el('div', 'plist');
     function row(o) {
-      var r = el('button', 'prow', avatarHtml(o, 'sm') + '<span class="am"><b>' + esc(o.displayName || o.username) + '</b><small>@' + esc(o.username) + (o.sample ? ' · sample' : ' · on this device') + '</small></span>' + (state.following[o.username] ? '<span class="atag">Following</span>' : '<span class="chev"></span>'));
+      var r = el('button', 'prow', avatarHtml(o, 'sm') + '<span class="am"><b>' + esc(o.displayName || o.username) + '</b><small>@' + esc(o.username) + ' · on this device' + '</small></span>' + (state.following[o.username] ? '<span class="atag">Following</span>' : '<span class="chev"></span>'));
       r.onclick = function () { var keep = sh; openSheet('profile', { user: o.username, prev: keep }); }; list.appendChild(r);
     }
     if ((sh.tab || 'find') === 'following') {
       var F = Object.keys(state.following).sort(function (x, y) { return state.following[y] - state.following[x]; });
       if (!F.length) list.appendChild(el('div', 'emptycard small', '<div class="eh">Not following anyone yet</div><p>Tap a name in the comments, or find people below.</p>'));
-      F.forEach(function (u) { var a = accByName(u); row(a ? a : sampleProfile(u)); });
+      F.forEach(function (u) { var a = accByName(u); if (a) row(a); });
     } else {
       var sb = el('label', 'sbox', svg('search') + '<input type="search" placeholder="Search by username or name" aria-label="Search people">'), si = E('input', sb); si.value = sh.q || '';
       si.oninput = function () { sh.q = si.value; clearTimeout(sh.tm); sh.tm = setTimeout(function () { SHEETS.people(); var x = E('.sbox input', sheet); if (x) { x.focus(); x.setSelectionRange(x.value.length, x.value.length); } }, 160); };
       b.appendChild(sb);
       var locals = accList().filter(function (a) { return (!cur || a.id !== cur.id) && priv(a).searchable && (!q || a.username.indexOf(q) >= 0 || (a.displayName || '').toLowerCase().indexOf(q) >= 0); });
       if (locals.length) { b.appendChild(el('div', 'secthead', '<b>On this device</b><span>' + locals.length + '</span>')); locals.forEach(row); b.appendChild(list); list = el('div', 'plist'); }
-      var samples = CM_USERS.filter(function (u) { return !q || u.indexOf(q) >= 0; }).map(sampleProfile);
-      if (samples.length) { b.appendChild(el('div', 'secthead', '<b>Sample learners</b><span>Made up for the demo</span>')); samples.forEach(row); }
-      if (!locals.length && !samples.length) list.appendChild(el('div', 'emptycard small', '<div class="eh">No one found</div><p>Accounts that turned off “Show in search” won\'t appear.</p>'));
+      if (!locals.length) list.appendChild(el('div', 'emptycard small', '<div class="eh">No one found</div><p>Accounts that turned off “Show in search” won\'t appear.</p>'));
     }
     b.appendChild(list);
   };
@@ -8338,13 +8312,11 @@ window.__SL_MORE_FIX__ = {
     var rows = [], cur = me();
     rows.push({ name: cur ? (cur.displayName || cur.username) : (state.settings.name || 'You'), user: meName(), pts: me2.pts, you: true, av: cur });
     accList().forEach(function (a) { if (cur && a.id === cur.id) return; if (!priv(a).stats || priv(a).visibility === 'private') return; var st = slotOf(a.id); if (st) rows.push({ name: a.displayName || a.username, user: a.username, pts: weekStats(st, ws).pts, av: a }); });
-    Object.keys(state.following).forEach(function (u) { if (rows.some(function (r) { return r.user === u; })) return; if (CM_USERS.indexOf(u) >= 0) { var sp = sampleProfile(u); rows.push({ name: sp.displayName, user: u, pts: 20 + hash(u + ws) % 260, sample: true, av: sp }); } });
-    CM_USERS.slice(0, 5).forEach(function (u) { if (rows.some(function (r) { return r.user === u; })) return; var sp = sampleProfile(u); rows.push({ name: sp.displayName, user: u, pts: 20 + hash(u + ws) % 260, sample: true, av: sp }); });
     rows.sort(function (a, c) { return c.pts - a.pts; });
     var lb = el('div', 'plist');
-    rows.forEach(function (r, i) { var x = el('button', 'prow lbrow' + (r.you ? ' you' : ''), '<span class="lbn">' + (i + 1) + '</span>' + avatarHtml(r.av || { username: r.user }, 'sm') + '<span class="am"><b>' + esc(r.name) + (r.you ? ' (you)' : '') + '</b><small>@' + esc(r.user) + (r.sample ? ' · sample' : '') + '</small></span><span class="lbp">' + r.pts + '</span>'); x.onclick = function () { openProfile(r.user); }; lb.appendChild(x); });
+    rows.forEach(function (r, i) { var x = el('button', 'prow lbrow' + (r.you ? ' you' : ''), '<span class="lbn">' + (i + 1) + '</span>' + avatarHtml(r.av || { username: r.user }, 'sm') + '<span class="am"><b>' + esc(r.name) + (r.you ? ' (you)' : '') + '</b><small>@' + esc(r.user) + '' + '</small></span><span class="lbp">' + r.pts + '</span>'); x.onclick = function () { openProfile(r.user); }; lb.appendChild(x); });
     b.appendChild(lb);
-    b.appendChild(el('div', 'note2', 'Points: clips watched + saves ×3 + reviews ×2 + practice answers + 10 per study day. Accounts on this device appear if their stats are public; sample learners are made up.'));
+    b.appendChild(el('div', 'note2', 'Points: clips watched + saves ×3 + reviews ×2 + practice answers + 10 per study day. Accounts on this device appear if their stats are public.'));
     b.appendChild(el('div', 'h3', 'Share a playlist'));
     var sv = Object.keys(state.savedClips);
     var row = el('div', 'rowbtns');
