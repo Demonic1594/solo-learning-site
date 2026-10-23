@@ -3841,7 +3841,7 @@ window.__SL_MORE_FIX__ = {
 
   // ================= feed =================
   var MODES = [{ id: 'Mix', icon: 'shuffle' }, { id: 'YouTube', icon: 'play' }, { id: 'TikTok', icon: 'music' }, { id: 'Instagram', icon: 'camera' }];
-  var pages = [], openPop = null;
+  var pages = [], shellEls = [], openPop = null;
   function closePop() { if (openPop) { openPop.close(); openPop = null; } }
 
   function renderTop() {
@@ -4267,6 +4267,7 @@ window.__SL_MORE_FIX__ = {
     }
     // Pages are built just before they scroll into view, so 300 clips stay fast.
     var shells = queue.map(function (c, n) { var s = el('div', 'page shell'); s.dataset.i = n; pager.appendChild(s); return s; });
+    shellEls = shells;
     function buildAt(i) {
       var s = shells[i]; if (!s || s._built) return; s._built = 1;
       var P = renderClipPage(queue[i], i, queue.length); P.idx = i; pages.push(P);
@@ -4305,6 +4306,27 @@ window.__SL_MORE_FIX__ = {
     posEl.style.display = '';
     var i = Math.round(p.scrollTop / p.clientHeight);
     posEl.textContent = i >= feedCount ? 'End' : (i + 1) + ' / ' + feedCount;
+    pagerWindow(i);
+  }
+  // Two-way windowing: only pages near the viewport stay built. Distant ones
+  // tear back down to empty shells (iframes, players and all), so deep scrolls
+  // never accumulate hundreds of live pages.
+  function pagerWindow(i) {
+    if (!feedBuild || !feedCount) return;
+    var lo = Math.max(0, i - 2), hi = Math.min(feedCount - 1, i + 2);
+    for (var n = lo; n <= hi; n++) feedBuild(n);
+    var keep = {};
+    for (var k = lo; k <= hi; k++) keep[k] = 1;
+    keep[Math.round((E('#pager').scrollTop / (E('#pager').clientHeight || 1)))] = 1;
+    pages.slice().forEach(function (P) {
+      if (P.idx == null || keep[P.idx] || P === player.cur) return;
+      if (io) io.unobserve(P.el);
+      var shell = el('div', 'page shell'); shell.dataset.i = P.idx;
+      if (P.el.parentNode) E('#pager').replaceChild(shell, P.el);
+      shellEls[P.idx] = shell;
+      if (buildIO) buildIO.observe(shell);
+      pages.splice(pages.indexOf(P), 1);
+    });
   }
   function goToClip(id) {
     var q = feedQueue(), i = q.findIndex(function (c) { return c.id === id; });
@@ -8386,5 +8408,5 @@ var SLCaps = (function () {
   window.__SL_APP__ = { state: function () { return state; }, player: player, info: info, toks: toks, CLIPS: CLIPS, lookup: function (s) { return rawLookup(s); } };
 })();
 </script>
-</body>
+<script>if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost' || location.hostname==='127.0.0.1')){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script></body>
 </html>
