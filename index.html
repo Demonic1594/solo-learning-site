@@ -3544,7 +3544,10 @@ window.__SL_MORE_FIX__ = {
     });
     return out;
   }
-  var CLIPS = (window.__SL_CLIPS__ || []).concat(EXTRA_CLIPS).concat(moreClips()).map(prepClip);
+  // These are example sentences for practice, the path and word examples, not videos: the feed skips them (c.sample).
+  var CLIPS = (window.__SL_CLIPS__ || []).concat(EXTRA_CLIPS).concat(moreClips()).map(function (c) { var p = prepClip(c); p.sample = true; return p; });
+  function byline(c) { return c.sample ? 'Example sentence' : '@' + c.creator; }
+  function bylineOn(c) { return c.sample ? 'Example sentence' : '@' + c.creator + ' on ' + c.platform; }
   var clipById = {}; CLIPS.forEach(function (c) { clipById[c.id] = c; });
   function srcLabel(c) { return c.source || 'Audio'; }
 
@@ -3833,10 +3836,10 @@ window.__SL_MORE_FIX__ = {
   }
 
   function makeCard(o) {
-    var card = SL.engine.newCard({ id: o.id, reading: o.reading || '', meaning: o.meaning || '', sentence: o.clip ? o.clip.jp : o.sentence, sourceCreator: o.clip && o.clip.creator });
+    var card = SL.engine.newCard({ id: o.id, reading: o.reading || '', meaning: o.meaning || '', sentence: o.clip ? o.clip.jp : o.sentence, sourceCreator: o.clip && !o.clip.sample ? o.clip.creator : null });
     card.type = o.type || 'word';
     if (o.clip) {
-      card.clipId = o.clip.id; card.sourcePlatform = o.clip.platform; card.source = srcLabel(o.clip);
+      card.clipId = o.clip.id; if (!o.clip.sample) card.sourcePlatform = o.clip.platform; card.source = srcLabel(o.clip);
       card.sourceKind = o.clip.kind || 'original'; if (o.clip.srcText) card.sourceText = o.clip.srcText;
       card.sentenceEn = o.clip.en;
       if ((o.type || 'word') === 'sentence' && o.clip.romaji) card.romaji = o.clip.romaji;
@@ -4372,7 +4375,7 @@ window.__SL_MORE_FIX__ = {
   var jit = {}, posEl = null, feedCount = 0, io = null, buildIO = null, feedBuild = function () {};
   function lvRank(l) { return 6 - Number(String(l || 'N5').slice(1)); }
   function feedQueue() {
-    var tp = state.settings.topics, base = (state.mode === 'Mix' ? CLIPS : CLIPS.filter(function (c) { return c.platform === state.mode; })).filter(function (c) { return !state.hiddenClips[c.id] && (c.user || !tp || !tp.length || tp.indexOf(c.category) >= 0); });
+    var tp = state.settings.topics, base = (state.mode === 'Mix' ? CLIPS : CLIPS.filter(function (c) { return c.platform === state.mode; })).filter(function (c) { return !c.sample && !state.hiddenClips[c.id] && (c.user || !tp || !tp.length || tp.indexOf(c.category) >= 0); });
     var me = lvRank(state.settings.jlpt);
     base.forEach(function (c) { if (jit[c.id] == null) jit[c.id] = Math.random() * 1.6; });
     var byFit = state.settings.feedOrder === 'fit';
@@ -4388,7 +4391,8 @@ window.__SL_MORE_FIX__ = {
     var queue = feedQueue();
     if (!queue.length) {
       var ep = el('div', 'page');
-      ep.innerHTML = '<div class="emptyFeed"><div class="eh">No ' + esc(state.mode) + ' clips yet</div><p>This platform has nothing in your feed right now. Switch back to Mix to keep scrolling.</p></div>';
+      ep.innerHTML = '<div class="emptyFeed"><div class="eh">No ' + (state.mode === 'Mix' ? '' : esc(state.mode) + ' ') + 'clips yet</div><p>' + (state.mode === 'TikTok' || state.mode === 'Instagram' ? 'Paste a ' + esc(state.mode) + ' link and it plays here through ' + esc(state.mode) + '\'s own player. Only you see clips you add.' : state.mode === 'Mix' ? 'Paste a YouTube Short, TikTok or Instagram Reel link to start your feed.' : 'This platform has nothing in your feed right now. Switch back to Mix to keep scrolling.') + '</p></div>';
+      if (state.mode !== 'YouTube') { var addB = el('button', 'btn pri', state.mode === 'Instagram' ? 'Add a Reel' : state.mode === 'TikTok' ? 'Add a TikTok' : 'Add a clip'); addB.onclick = openAddClip; E('.emptyFeed', ep).appendChild(addB); }
       var sw = el('button', 'btn pri', 'Switch to Mix');
       sw.onclick = function () { state.mode = 'Mix'; save(); renderPager(true); renderTop(); };
       ep.firstChild.appendChild(sw); pager.appendChild(ep); feedCount = 0; updatePos(); return;
@@ -4458,6 +4462,8 @@ window.__SL_MORE_FIX__ = {
     });
   }
   function goToClip(id) {
+    var sc = clipById[id];
+    if (sc && sc.sample) { if (!state.stats.seen[id]) { state.stats.seen[id] = SL.engine.dayKey(); save(); } openStudy(sc); return; }
     var q = feedQueue(), i = q.findIndex(function (c) { return c.id === id; });
     if (i < 0) { state.mode = 'Mix'; state.settings.topics = null; save(); renderTop(); renderPager(true); q = feedQueue(); i = q.findIndex(function (c) { return c.id === id; }); }
     closeStudy(); setTab('feed');
@@ -4623,7 +4629,7 @@ window.__SL_MORE_FIX__ = {
     sheet.innerHTML = '';
     var grab = el('div', 'shgrab', '<i></i>'); sheet.appendChild(grab);
     dragToClose(grab);
-    var top = el('div', 'shtop', '<div class="tt"><b>Breakdown</b><span>@' + esc(c.creator) + ' on ' + esc(c.platform) + '</span></div>');
+    var top = el('div', 'shtop', '<div class="tt"><b>Breakdown</b><span>' + esc(bylineOn(c)) + '</span></div>');
     var x = el('button', 'close', svg('x')); x.setAttribute('aria-label', 'Back to clip'); x.onclick = closeStudy; x.style.margin = '0';
     if (sh.ret) { var bk = el('button', 'shback', svg('back')); bk.setAttribute('aria-label', 'Back'); var prevSh = sh.ret; bk.onclick = function () { sh = prevSh; renderSheet(); }; top.insertBefore(bk, top.firstChild); }
     top.appendChild(x); sheet.appendChild(top);
@@ -4726,7 +4732,7 @@ window.__SL_MORE_FIX__ = {
   }
   SHEETS.topics = function () {
     var b = sheetFrame('Topics', 'Show only what you\'re into'), counts = {};
-    CLIPS.forEach(function (c) { if (state.mode === 'Mix' || c.platform === state.mode) counts[c.category || 'Other'] = (counts[c.category || 'Other'] || 0) + 1; });
+    CLIPS.forEach(function (c) { if (!c.sample && (state.mode === 'Mix' || c.platform === state.mode)) counts[c.category || 'Other'] = (counts[c.category || 'Other'] || 0) + 1; });
     var g = el('div', 'tgrid');
     Object.keys(counts).sort(function (a, b2) { return counts[b2] - counts[a]; }).forEach(function (k) {
       var on = sh.pick.indexOf(k) >= 0, sc = SCENES[k] || SCENES.Daily;
@@ -4736,7 +4742,7 @@ window.__SL_MORE_FIX__ = {
       g.appendChild(x);
     });
     b.appendChild(g);
-    var n = CLIPS.filter(function (c) { return (state.mode === 'Mix' || c.platform === state.mode) && (!sh.pick.length || sh.pick.indexOf(c.category) >= 0); }).length;
+    var n = CLIPS.filter(function (c) { return !c.sample && (state.mode === 'Mix' || c.platform === state.mode) && (!sh.pick.length || sh.pick.indexOf(c.category) >= 0); }).length;
     var row = el('div', 'shfoot');
     var all = el('button', 'btn gho', 'Show everything'); all.onclick = function () { state.settings.topics = null; save(); closeStudy(); jit = {}; renderTop(); renderPager(true); };
     var ok = el('button', 'btn pri', 'Show ' + n + ' clips'); ok.onclick = function () { state.settings.topics = sh.pick.length ? sh.pick.slice() : null; save(); closeStudy(); jit = {}; renderTop(); renderPager(true); };
@@ -4815,7 +4821,7 @@ window.__SL_MORE_FIX__ = {
         if (also.length) {
           d.appendChild(el('div', null, '<div style="margin-top:10px;color:var(--t3);font-size:12px">Also in</div>'));
           var a = el('div', 'also');
-          also.forEach(function (cl) { var bb = el('button', null, '@' + esc(cl.creator)); bb.onclick = function () { goToClip(cl.id); }; a.appendChild(bb); });
+          also.forEach(function (cl) { var bb = el('button', null, cl.sample ? esc((cl.jp || '').slice(0, 12) + ((cl.jp || '').length > 12 ? '…' : '')) : '@' + esc(cl.creator)); bb.onclick = function () { goToClip(cl.id); }; a.appendChild(bb); });
           d.appendChild(a);
         }
       } else if (inf.kind === 'grammar') {
@@ -5133,7 +5139,7 @@ window.__SL_MORE_FIX__ = {
     if (inClips.length) {
       b.appendChild(el('div', 'h3', 'Heard in clips'));
       var cl = el('div', 'dlist');
-      inClips.forEach(function (c) { var r = el('button', 'cliprow', '<span class="cav" style="background:rgb(' + (SCENES[c.category] || SCENES.Daily)[0] + ')">' + esc(c.creator.charAt(0).toUpperCase()) + '</span><span><b lang="ja">' + esc(c.jp) + '</b><small>@' + esc(c.creator) + '</small></span>'); r.onclick = function () { goToClip(c.id); }; cl.appendChild(r); });
+      inClips.forEach(function (c) { var r = el('button', 'cliprow', '<span class="cav" style="background:rgb(' + (SCENES[c.category] || SCENES.Daily)[0] + ')">' + (c.sample ? '例' : esc(c.creator.charAt(0).toUpperCase())) + '</span><span><b lang="ja">' + esc(c.jp) + '</b><small>' + esc(byline(c)) + '</small></span>'); r.onclick = function () { goToClip(c.id); }; cl.appendChild(r); });
       b.appendChild(cl);
     }
   };
@@ -5210,7 +5216,7 @@ window.__SL_MORE_FIX__ = {
       var strip = el('div', 'cstrip');
       sv.forEach(function (id) {
         var c = clipById[id], sc = SCENES[c.category] || SCENES.Daily;
-        var x = el('button', 'ccard', '<span class="cbg" style="background:radial-gradient(120% 80% at 70% 20%,rgba(' + sc[0] + ',.6),' + sc[2] + ' 70%)"></span><span class="cpl">' + esc(c.platform === 'Instagram' ? 'IG' : c.platform === 'TikTok' ? 'TT' : 'YT') + '</span><span class="ct2"><b' + (c.jp ? ' lang="ja"' : '') + '>' + esc(c.jp || c.title || c.category) + '</b><small>@' + esc(c.creator) + '</small></span>');
+        var x = el('button', 'ccard', '<span class="cbg" style="background:radial-gradient(120% 80% at 70% 20%,rgba(' + sc[0] + ',.6),' + sc[2] + ' 70%)"></span>' + (c.sample ? '' : '<span class="cpl">' + esc(c.platform === 'Instagram' ? 'IG' : c.platform === 'TikTok' ? 'TT' : 'YT') + '</span>') + '<span class="ct2"><b' + (c.jp ? ' lang="ja"' : '') + '>' + esc(c.jp || c.title || c.category) + '</b><small>' + esc(byline(c)) + '</small></span>');
         x.onclick = function () { goToClip(id); }; strip.appendChild(x);
       });
       v.appendChild(strip);
@@ -5325,7 +5331,7 @@ window.__SL_MORE_FIX__ = {
     var acts = el('div', 'rowbtns');
     var lb = el('button', 'btn gho', svg('volume') + 'Listen'); lb.onclick = function () { speak(isS ? c.id : c.reading || c.id); }; acts.appendChild(lb);
     var rvb = el('button', 'btn pri', 'Review now'); rvb.onclick = function () { closeStudy(); openReview([c.id]); }; acts.appendChild(rvb);
-    if (clip) { var wc = el('button', 'btn gho', svg('play') + 'Watch clip'); wc.onclick = function () { goToClip(clip.id); }; acts.appendChild(wc); }
+    if (clip) { var wc = el('button', 'btn gho', clip.sample ? svg('zoom') + 'See the sentence' : svg('play') + 'Watch clip'); wc.onclick = function () { goToClip(clip.id); }; acts.appendChild(wc); }
     b.appendChild(acts);
     // memory
     var nextTxt = SL.engine.isDue(c) ? 'Due now' : 'In ' + SL.engine.intervalLabel(c.dueAt - Date.now());
@@ -5337,9 +5343,9 @@ window.__SL_MORE_FIX__ = {
       var i0 = c.sentence.indexOf(c.id);
       b.appendChild(el('div', 'h3', 'Where you saw it'));
       b.appendChild(el('div', 'ctxcard', '<div class="cj" lang="ja">' + (i0 >= 0 ? esc(c.sentence.slice(0, i0)) + '<mark>' + esc(c.id) + '</mark>' + esc(c.sentence.slice(i0 + c.id.length)) : esc(c.sentence)) + '</div>' + (c.sentenceEn ? '<div class="ce">' + esc(c.sentenceEn) + '</div>' : '') +
-        (c.sourceText ? '<div class="ce">In the clip: “' + esc(c.sourceText) + '”</div>' : '') + '<div class="cs">' + (c.sourceCreator ? '@' + esc(c.sourceCreator) + (c.sourcePlatform ? ' on ' + esc(c.sourcePlatform) : '') + ', ' + (c.sourceKind === 'equivalent' ? 'Japanese equivalent' : 'original Japanese') + ' from ' + esc((c.source || 'audio').toLowerCase()) : 'From the ' + esc(c.dict || 'dictionary')) + '</div>'));
+        (c.sourceText ? '<div class="ce">In the clip: “' + esc(c.sourceText) + '”</div>' : '') + '<div class="cs">' + (clip && clip.sample ? 'Example sentence' : c.sourceCreator ? '@' + esc(c.sourceCreator) + (c.sourcePlatform ? ' on ' + esc(c.sourcePlatform) : '') + ', ' + (c.sourceKind === 'equivalent' ? 'Japanese equivalent' : 'original Japanese') + ' from ' + esc((c.source || 'audio').toLowerCase()) : 'From the ' + esc(c.dict || 'dictionary')) + '</div>'));
     } else if (c.sourceText || c.sourceCreator) {
-      b.appendChild(el('div', 'ctxcard', (c.sourceText ? '<div class="ce">In the clip: “' + esc(c.sourceText) + '”</div>' : '') + '<div class="cs">@' + esc(c.sourceCreator || '') + (c.sourcePlatform ? ' on ' + esc(c.sourcePlatform) : '') + (c.source ? ', from ' + esc(c.source.toLowerCase()) : '') + '</div>'));
+      b.appendChild(el('div', 'ctxcard', (c.sourceText ? '<div class="ce">In the clip: “' + esc(c.sourceText) + '”</div>' : '') + '<div class="cs">' + (clip && clip.sample ? 'Example sentence' : '@' + esc(c.sourceCreator || '') + (c.sourcePlatform ? ' on ' + esc(c.sourcePlatform) : '') + (c.source ? ', from ' + esc(c.source.toLowerCase()) : '')) + '</div>'));
     }
     // dictionary
     if (!isS) {
@@ -5629,10 +5635,10 @@ window.__SL_MORE_FIX__ = {
     privacyCard(v);
     accountsSection(v);
     var fc = card(v, 'Feed');
-    var modeN = CLIPS.filter(function (c) { return c.platform === state.mode; }).length;
+    var feedN = CLIPS.filter(function (c) { return !c.sample; }), modeN = feedN.filter(function (c) { return c.platform === state.mode; }).length;
     segRow(fc, 'Source', MODES.map(function (m) { return [m.id, m.id === 'Instagram' ? 'Insta' : m.id]; }), state.mode,
       function (id) { state.mode = id; save(); renderPager(true); renderTop(); renderView(); },
-      state.mode === 'Mix' ? CLIPS.length + ' clips shuffled from every platform.' : modeN ? modeN + ' ' + state.mode + ' clips only.' : 'No ' + state.mode + ' clips yet.');
+      state.mode === 'Mix' ? feedN.length + ' clips shuffled from every platform.' : modeN ? modeN + ' ' + state.mode + ' clips only.' : 'No ' + state.mode + ' clips yet.');
     var fs = el('div', 'stack');
     switchRow(fs, 'Autoplay', 'Clips start when they scroll into view', s.autoplay !== false, function (on) { s.autoplay = on; save(); player.sync(); renderView(); });
     switchRow(fs, 'Sound', 'Video sound on. Sample clips read their line aloud', !!s.sound, function (on) { s.sound = on; save(); pages.forEach(function (p) { p.paintSound(); }); renderView(); });
@@ -6307,7 +6313,7 @@ window.__SL_MORE_FIX__ = {
       fb.innerHTML = h;
       var acts = el('div', 'fbacts');
       var hr = el('button', 'iconbtn', svg('volume')); hr.setAttribute('aria-label', 'Hear it'); hr.onclick = function () { speak(cardSpeech(c)); }; acts.appendChild(hr);
-      if (c.clipId && clipById[c.clipId]) { var wc = el('button', 'btn gho', 'Watch clip'); wc.onclick = function () { var id = c.clipId; closeReview(); goToClip(id); }; acts.appendChild(wc); }
+      if (c.clipId && clipById[c.clipId]) { var wc = el('button', 'btn gho', clipById[c.clipId].sample ? 'See the sentence' : 'Watch clip'); wc.onclick = function () { var id = c.clipId; closeReview(); goToClip(id); }; acts.appendChild(wc); }
       fb.appendChild(acts);
       body.appendChild(fb);
       var prev = SL.engine.previewIntervals(c), gr = el('div', 'grades');
@@ -7660,7 +7666,7 @@ window.__SL_MORE_FIX__ = {
     if ((pv.saved || viewer === 'self') && P.st.savedClips.length) {
       b.appendChild(el('div', 'secthead', '<b>Saved clips</b><span>' + P.st.savedClips.length + (viewer === 'self' && !pv.saved ? ' · hidden from others' : '') + '</span>'));
       var strip = el('div', 'cstrip');
-      P.st.savedClips.slice(0, 12).forEach(function (id) { var c = clipById[id]; if (!c) return; var sc = SCENES[c.category] || SCENES.Daily; var x = el('button', 'ccard', '<span class="cbg" style="background:radial-gradient(120% 80% at 70% 20%,rgba(' + sc[0] + ',.6),' + sc[2] + ' 70%)"></span><span class="ct2"><b' + (c.jp ? ' lang="ja"' : '') + '>' + esc(c.jp || c.title || c.category) + '</b><small>@' + esc(c.creator) + '</small></span>'); x.onclick = function () { closeStudy(); goToClip(id); }; strip.appendChild(x); });
+      P.st.savedClips.slice(0, 12).forEach(function (id) { var c = clipById[id]; if (!c) return; var sc = SCENES[c.category] || SCENES.Daily; var x = el('button', 'ccard', '<span class="cbg" style="background:radial-gradient(120% 80% at 70% 20%,rgba(' + sc[0] + ',.6),' + sc[2] + ' 70%)"></span><span class="ct2"><b' + (c.jp ? ' lang="ja"' : '') + '>' + esc(c.jp || c.title || c.category) + '</b><small>' + esc(byline(c)) + '</small></span>'); x.onclick = function () { closeStudy(); goToClip(id); }; strip.appendChild(x); });
       b.appendChild(strip);
     }
     profFoot(b, P);
@@ -8141,18 +8147,18 @@ window.__SL_MORE_FIX__ = {
       var isDone = !!p.done[u.id], isCur = i === cur, locked = !isDone && !isCur && i > cur + 1;
       var sc = SCENES[u.cat] || SCENES.Daily, m = pmode(u.mode);
       var row = el('div', 'punit' + (isDone ? ' done' : '') + (isCur ? ' cur' : '') + (locked ? ' locked' : ''));
-      row.innerHTML = '<span class="pun" style="--c:' + sc[0] + '">' + (isDone ? svg('check') : (i + 1)) + '</span><span class="pum"><b>' + esc(u.cat) + ' ' + (Math.floor(i / 1) + 1) + '</b><small>3 clips · ' + esc(m ? m.name : u.mode) + ' · kanji</small></span>';
+      row.innerHTML = '<span class="pun" style="--c:' + sc[0] + '">' + (isDone ? svg('check') : (i + 1)) + '</span><span class="pum"><b>' + esc(u.cat) + ' ' + (Math.floor(i / 1) + 1) + '</b><small>3 sentences · ' + esc(m ? m.name : u.mode) + ' · kanji</small></span>';
       list.appendChild(row);
       if (!isCur && !isDone) return;
       if (isDone) return;
       if (!p.started[u.id]) { p.started[u.id] = Date.now(); save(); }
       var pr = unitProgress(u), steps = el('div', 'psteps');
       function step(ok, title, sub, btnText, fn) { var s = el('div', 'pstep' + (ok ? ' ok' : ''), '<span class="psi">' + (ok ? svg('check') : '') + '</span><span class="psm"><b>' + title + '</b><small>' + sub + '</small></span>'); if (btnText && !ok) { var x = el('button', 'btn gho sm', btnText); x.onclick = fn; s.appendChild(x); } steps.appendChild(s); }
-      step(pr.steps[0], 'Watch 3 clips', pr.watched + ' of 3 watched', 'Watch', function () { var next = u.clips.filter(function (id) { return !state.stats.seen[id]; })[0] || u.clips[0]; closeStudy(); goToClip(next); toast('Path clip: watch for a few seconds'); });
+      step(pr.steps[0], 'Read 3 sentences', pr.watched + ' of 3 read', 'Read', function () { var next = u.clips.filter(function (id) { return !state.stats.seen[id]; })[0] || u.clips[0]; closeStudy(); goToClip(next); });
       step(pr.steps[1], 'Save 3 words or lines from them', pr.saved + ' of 3 saved', 'Go', function () { closeStudy(); goToClip(u.clips[0]); });
       step(pr.steps[2], 'Pass a ' + (m ? m.name : u.mode) + ' session', 'Score 60% or more', 'Practice', function () { closeStudy(); startPractice(u.mode); });
       step(pr.steps[3], 'Learn ' + Math.min(3, pr.kset.length) + ' kanji', pr.kset.join(' ') + ' · ' + pr.kl + ' learned', 'Learn', function () { openSheet('klesson', { ch: pr.kset.filter(function (k) { return !(state.kanjiLearned || {})[k]; })[0] || pr.kset[0], set: pr.kset, ret: sh }); });
-      var cl = el('div', 'pclips'); u.clips.forEach(function (id) { var c = clipById[id]; var r = el('button', 'cliprow', '<span class="cav" style="background:rgb(' + (SCENES[c.category] || SCENES.Daily)[0] + ')">' + (state.stats.seen[id] ? '✓' : esc(c.creator.charAt(0).toUpperCase())) + '</span><span><b lang="ja">' + esc(c.jp) + '</b><small>' + comprehension(c) + '% known · @' + esc(c.creator) + '</small></span>'); r.onclick = function () { closeStudy(); goToClip(id); }; cl.appendChild(r); });
+      var cl = el('div', 'pclips'); u.clips.forEach(function (id) { var c = clipById[id]; var r = el('button', 'cliprow', '<span class="cav" style="background:rgb(' + (SCENES[c.category] || SCENES.Daily)[0] + ')">' + (state.stats.seen[id] ? '✓' : c.sample ? '例' : esc(c.creator.charAt(0).toUpperCase())) + '</span><span><b lang="ja">' + esc(c.jp) + '</b><small>' + comprehension(c) + '% known · ' + esc(byline(c)) + '</small></span>'); r.onclick = function () { closeStudy(); goToClip(id); }; cl.appendChild(r); });
       steps.appendChild(cl);
       if (pr.done) { var fin = el('button', 'cta', 'Complete unit'); fin.onclick = function () { p.done[u.id] = Date.now(); state.stats.units = (state.stats.units || 0) + 1; logActivity('study'); save(); toast('Unit complete!'); SHEETS.path(); }; steps.appendChild(fin); }
       list.appendChild(steps);
