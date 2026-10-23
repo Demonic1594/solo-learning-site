@@ -29,6 +29,8 @@ self.addEventListener('fetch', function (e) {
   if (req.method !== 'GET') return;
   var url = new URL(req.url);
   if (url.origin !== location.origin) return;
+  // Dev-server endpoints (/__something) are never cached; their answers change without their URL changing.
+  if (/\/__[a-z]/.test(url.pathname)) return;
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then(function (r) {
       var copy = r.clone(); caches.open(CACHE).then(function (c) { c.put('./', copy); });
