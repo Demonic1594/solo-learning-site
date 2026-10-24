@@ -1632,10 +1632,10 @@
   .offline svg{flex:none;width:16px;height:16px;stroke:var(--kincha);stroke-width:1.8;fill:none}
   .shbody > .cta{width:100%;flex:none}
   .subs .lcard{background:none;box-shadow:none;padding:0;backdrop-filter:none;-webkit-backdrop-filter:none}
-  /* Player: one set of controls (prev / play-pause / next); YouTube's own are off */
+  /* Player: one play / pause button; YouTube's own are off */
   .page .tapfx{display:none}
-  .xport{position:absolute;left:50%;top:34%;transform:translateX(-50%);z-index:4;display:flex;align-items:center;padding:6px;border-radius:999px;background:rgba(6,6,9,.22);backdrop-filter:blur(6px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);opacity:0;pointer-events:none;transition:opacity .18s}
-  .xsub{position:absolute;left:50%;top:calc(34% + 72px);transform:translateX(-50%);z-index:4;display:flex;gap:8px;opacity:0;pointer-events:none;transition:opacity .18s;white-space:nowrap}
+  .xport{position:absolute;left:50%;top:34%;transform:translateX(-50%);z-index:4;display:flex;align-items:center;padding:6px;border-radius:999px;background:rgba(6,6,9,.22);backdrop-filter:blur(6px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);opacity:0;pointer-events:none}
+  .xsub{position:absolute;left:50%;top:calc(34% + 72px);transform:translateX(-50%);z-index:4;display:flex;gap:8px;opacity:0;pointer-events:none;white-space:nowrap}
   .page.xshow .xport,.page.paused .xport,.page.xshow .xsub,.page.paused .xsub{opacity:1;pointer-events:auto}
   .xb{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#fff}
   .xb.big{width:60px;height:60px;background:rgba(255,255,255,.07)}
@@ -4289,7 +4289,8 @@ window.__SL_MORE_FIX__ = {
         setTimeout(function () { P.loading = false; P.ready = true; paintSubs(); paintChips(); }, 650);
       }
     };
-    P.flash = function () { xAuto.classList.toggle('on', state.settings.autoSpeak !== false); page.classList.add('xshow'); clearTimeout(P.fxT); P.fxT = setTimeout(function () { page.classList.remove('xshow'); }, 2800); };
+    // The controls show while paused and go the moment it plays again: nothing lingers.
+    P.flash = function () { xAuto.classList.toggle('on', state.settings.autoSpeak !== false); clearTimeout(P.fxT); page.classList.remove('xshow'); };
     P.seekTo = function (t) { P.t = Math.max(0, Math.min(Math.max(0, clip.dur - 0.05), t)); P.paint(clip.dur ? P.t / clip.dur : 0); };
     P.paintTokens = function () { P.tokEls.forEach(function (w) { var st = tokenState(w._t); ['new', 'learn', 'known', 'none'].forEach(function (c) { w.classList.remove(c); }); w.classList.add(st); }); };
     P.paintSubs = paintSubs; P.paintChips = paintChips;
@@ -4312,8 +4313,10 @@ window.__SL_MORE_FIX__ = {
       if (openPop) { closePop(); return; }
       if (E('.lpop', page)) { E('.lpop', page).remove(); return; }
       var now = Date.now();
+      // A tap pauses or plays at once; a second tap straight after undoes it and likes instead.
       if (now - lastTap < 300) {
         clearTimeout(tapT); lastTap = 0;
+        if (player.cur === P) { player.userPaused = !player.userPaused; player.sync(); P.flash(); }
         like(true);
         var b = el('div', 'burst', fillSvg('heart')); var r = page.getBoundingClientRect();
         b.style.left = (e.clientX - r.left) + 'px'; b.style.top = (e.clientY - r.top) + 'px';
@@ -4321,11 +4324,9 @@ window.__SL_MORE_FIX__ = {
         return;
       }
       lastTap = now;
-      tapT = setTimeout(function () {
-        if (player.cur !== P) return;
-        player.userPaused = !player.userPaused; player.sync();
-        P.flash(player.userPaused ? 'pause' : 'play');
-      }, 300);
+      if (player.cur !== P) return;
+      player.userPaused = !player.userPaused; player.sync();
+      P.flash(player.userPaused ? 'pause' : 'play');
     });
 
     if (clip.kind === 'equivalent' && seenEq[clip.id]) P.ready = true;
