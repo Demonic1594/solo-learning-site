@@ -1634,11 +1634,11 @@
   .subs .lcard{background:none;box-shadow:none;padding:0;backdrop-filter:none;-webkit-backdrop-filter:none}
   /* Player: one set of controls (prev / play-pause / next); YouTube's own are off */
   .page .tapfx{display:none}
-  .xport{position:absolute;left:50%;top:34%;transform:translateX(-50%);z-index:4;display:flex;align-items:center;gap:14px;padding:8px 14px;border-radius:999px;background:rgba(6,6,9,.6);backdrop-filter:blur(10px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);opacity:0;pointer-events:none;transition:opacity .18s}
+  .xport{position:absolute;left:50%;top:34%;transform:translateX(-50%);z-index:4;display:flex;align-items:center;padding:6px;border-radius:999px;background:rgba(6,6,9,.22);backdrop-filter:blur(6px);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);opacity:0;pointer-events:none;transition:opacity .18s}
   .xsub{position:absolute;left:50%;top:calc(34% + 72px);transform:translateX(-50%);z-index:4;display:flex;gap:8px;opacity:0;pointer-events:none;transition:opacity .18s;white-space:nowrap}
   .page.xshow .xport,.page.paused .xport,.page.xshow .xsub,.page.paused .xsub{opacity:1;pointer-events:auto}
   .xb{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#fff}
-  .xb.big{width:60px;height:60px;background:rgba(255,255,255,.16)}
+  .xb.big{width:60px;height:60px;background:rgba(255,255,255,.07)}
   .xb:disabled{opacity:.3}
   .xb svg{width:22px;height:22px;fill:#fff;stroke:#fff;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
   .xb.big svg{width:28px;height:28px}
@@ -3997,15 +3997,12 @@ window.__SL_MORE_FIX__ = {
     page.appendChild(el('div', 'scrimtop')); page.appendChild(el('div', 'scrim'));
     var fx = el('div', 'tapfx', fillSvg('play')); page.appendChild(fx);
     // One set of controls: YouTube's own are off. Tapping the video (or pausing from anywhere) shows
-    // previous / play-pause / next for a moment, with Replay line and Read aloud below.
+    // play / pause for a moment, with Replay line and Read aloud below.
     var xp = el('div', 'xport'), xs = el('div', 'xsub');
     function stopEv(e) { e.stopPropagation(); }
     [xp, xs].forEach(function (b) { b.addEventListener('click', stopEv); b.addEventListener('pointerdown', stopEv); });
     function xb(cls, html, aria, fn) { var b = el('button', 'xb' + cls, html); b.setAttribute('aria-label', aria); b.onclick = function (e) { e.stopPropagation(); fn(); }; xp.appendChild(b); return b; }
-    var xPrev = xb('', svg('prev'), 'Previous clip', function () { stepClip(-1); });
     xb(' big', '<span class="icp">' + svg('play') + '</span><span class="icq">' + svg('pause') + '</span>', 'Play or pause', function () { if (player.cur !== P) return; player.userPaused = !player.userPaused; player.sync(); P.flash(); });
-    var xNext = xb('', svg('next'), 'Next clip', function () { stepClip(1); });
-    xPrev.disabled = n === 0; xNext.disabled = n >= total - 1;
     var xRe = el('button', 'xchip', svg('restart') + '<span>Replay line</span>');
     xRe.onclick = function (e) { e.stopPropagation(); if (P.replayLine) P.replayLine(); else if (clip.jp) { P.voicing = true; speak(clip.jp, { rate: state.settings.playRate || 1 }); } };
     var xAuto = el('button', 'xchip', svg('volume') + '<span>Read aloud</span>');
