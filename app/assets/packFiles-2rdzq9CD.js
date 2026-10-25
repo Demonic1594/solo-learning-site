@@ -1,0 +1,1 @@
+import{_ as t}from"./index-Cz7NOtGO.js";const r=Object.assign({"../../../../data/practice/everyday-phrases.json":()=>t(()=>import("./everyday-phrases-Cu__G9bd.js"),[],import.meta.url).then(e=>e.default)});export{r as default};
